@@ -20,6 +20,7 @@ export const getUserSettings = query({
       // Return default settings if none exist
       return {
         defaultWebhookUrl: null,
+        defaultDiscordWebhookUrl: null,
         emailNotificationsEnabled: true,
         emailTemplate: null,
         aiAnalysisEnabled: false,
@@ -30,6 +31,7 @@ export const getUserSettings = query({
         aiApiKey: null,
         emailOnlyIfMeaningful: false,
         webhookOnlyIfMeaningful: false,
+        discordOnlyIfMeaningful: false,
       };
     }
 
@@ -263,6 +265,7 @@ export const updateNotificationFiltering = mutation({
   args: {
     emailOnlyIfMeaningful: v.optional(v.boolean()),
     webhookOnlyIfMeaningful: v.optional(v.boolean()),
+    discordOnlyIfMeaningful: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await requireCurrentUser(ctx);
@@ -287,6 +290,10 @@ export const updateNotificationFiltering = mutation({
         updateData.webhookOnlyIfMeaningful = args.webhookOnlyIfMeaningful;
       }
 
+      if (args.discordOnlyIfMeaningful !== undefined) {
+        updateData.discordOnlyIfMeaningful = args.discordOnlyIfMeaningful;
+      }
+
       await ctx.db.patch(existingSettings._id, updateData);
     } else {
       await ctx.db.insert("userSettings", {
@@ -295,6 +302,56 @@ export const updateNotificationFiltering = mutation({
         defaultWebhookUrl: undefined,
         emailOnlyIfMeaningful: args.emailOnlyIfMeaningful || false,
         webhookOnlyIfMeaningful: args.webhookOnlyIfMeaningful || false,
+        discordOnlyIfMeaningful: args.discordOnlyIfMeaningful || false,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+// Update default Discord webhook URL
+export const updateDefaultDiscordWebhook = mutation({
+  args: {
+    webhookUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireCurrentUser(ctx);
+
+    // Validate Discord webhook URL if provided
+    if (args.webhookUrl) {
+      try {
+        const url = new URL(args.webhookUrl);
+        if (!url.hostname.includes('discord.com') || !url.pathname.includes('/api/webhooks/')) {
+          throw new Error("Invalid Discord webhook URL. Must be a discord.com webhook URL.");
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message.includes('Invalid Discord')) {
+          throw e;
+        }
+        throw new Error("Invalid webhook URL format");
+      }
+    }
+
+    const existingSettings = await ctx.db
+      .query("userSettings")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .first();
+
+    const now = Date.now();
+
+    if (existingSettings) {
+      await ctx.db.patch(existingSettings._id, {
+        defaultDiscordWebhookUrl: args.webhookUrl || undefined,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("userSettings", {
+        userId: user._id,
+        defaultDiscordWebhookUrl: args.webhookUrl || undefined,
+        emailNotificationsEnabled: true,
         createdAt: now,
         updatedAt: now,
       });

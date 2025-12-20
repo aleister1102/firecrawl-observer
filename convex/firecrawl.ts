@@ -130,13 +130,15 @@ export const scrapeUrl = internalAction({
           });
 
           if (website && website.notificationPreference !== "none") {
-            // Send webhook notification
-            if ((website.notificationPreference === "webhook" || website.notificationPreference === "both") && website.webhookUrl) {
+            const notifPref = website.notificationPreference;
+            
+            // Send webhook notification (for generic webhooks)
+            if ((notifPref === "webhook" || notifPref === "both" || notifPref === "all") && website.webhookUrl) {
               await ctx.scheduler.runAfter(0, internal.notifications.sendWebhookNotification, {
                 webhookUrl: website.webhookUrl,
                 websiteId: args.websiteId,
                 websiteName: website.name,
-                websiteUrl: args.url, // Use the actual page URL, not the root website URL
+                websiteUrl: args.url,
                 scrapeResultId,
                 changeType: "content_changed",
                 changeStatus: changeTracking.changeStatus,
@@ -148,8 +150,25 @@ export const scrapeUrl = internalAction({
               });
             }
 
+            // Send Discord notification (dedicated Discord webhook)
+            if ((notifPref === "discord" || notifPref === "all") && website.discordWebhookUrl) {
+              await ctx.scheduler.runAfter(0, internal.notifications.sendDiscordNotification, {
+                webhookUrl: website.discordWebhookUrl,
+                websiteId: args.websiteId,
+                websiteName: website.name,
+                websiteUrl: args.url,
+                scrapeResultId,
+                changeType: "content_changed",
+                changeStatus: changeTracking.changeStatus,
+                diff: changeTracking?.diff,
+                title: metadata?.title,
+                description: metadata?.description,
+                scrapedAt: Date.now(),
+              });
+            }
+
             // Send email notification
-            if (website.notificationPreference === "email" || website.notificationPreference === "both") {
+            if (notifPref === "email" || notifPref === "both" || notifPref === "all") {
               // Get user's email configuration
               const emailConfig = await ctx.runQuery(internal.emailManager.getEmailConfigInternal, {
                 userId: args.userId,

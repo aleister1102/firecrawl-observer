@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, action, internalAction, internalQuery } from "./_generated/server";
 import { requireCurrentUser, getCurrentUser, requireCurrentUserForAction } from "./helpers";
 import { internal, api } from "./_generated/api";
+import { resend } from "./alertEmail";
 
 // Get email configuration
 export const getEmailConfig = query({
@@ -77,7 +78,7 @@ export const updateEmailConfig = mutation({
   },
 });
 
-// Send verification email using Resend
+// Send verification email using Resend component
 export const sendVerificationEmail = internalAction({
   args: {
     email: v.string(),
@@ -85,57 +86,39 @@ export const sendVerificationEmail = internalAction({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    const resendApiKey = process.env.RESEND_API_KEY;
-    if (!resendApiKey) {
-      console.error("RESEND_API_KEY not configured");
-      return;
-    }
-
     const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/verify-email?token=${args.token}`;
 
     try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: `${process.env.APP_NAME || 'Firecrawl Observer'} <${process.env.FROM_EMAIL || 'noreply@example.com'}>`,
-          to: args.email,
-          subject: 'Verify your email for Firecrawl Observer',
-          html: `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #EA580C; margin-bottom: 24px;">Verify Your Email</h2>
-              <p style="color: #374151; font-size: 16px; line-height: 24px; margin-bottom: 24px;">
-                Thank you for setting up email notifications with Firecrawl Observer. 
-                Please click the button below to verify your email address:
-              </p>
-              <a href="${verificationUrl}" 
-                 style="display: inline-block; background-color: #EA580C; color: white; padding: 12px 24px; 
-                        text-decoration: none; border-radius: 6px; font-weight: 500;">
-                Verify Email
-              </a>
-              <p style="color: #6B7280; font-size: 14px; margin-top: 24px;">
-                This link will expire in 24 hours. If you didn't request this, please ignore this email.
-              </p>
-              <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 32px 0;">
-              <p style="color: #9CA3AF; font-size: 12px;">
-                Firecrawl Observer - Website Change Monitoring
-              </p>
-            </div>
-          `,
-        }),
+      await resend.sendEmail(ctx, {
+        from: `${process.env.APP_NAME || 'Firecrawl Observer'} <${process.env.FROM_EMAIL || 'noreply@example.com'}>`,
+        to: args.email,
+        subject: 'Verify your email for Firecrawl Observer',
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #EA580C; margin-bottom: 24px;">Verify Your Email</h2>
+            <p style="color: #374151; font-size: 16px; line-height: 24px; margin-bottom: 24px;">
+              Thank you for setting up email notifications with Firecrawl Observer. 
+              Please click the button below to verify your email address:
+            </p>
+            <a href="${verificationUrl}" 
+               style="display: inline-block; background-color: #EA580C; color: white; padding: 12px 24px; 
+                      text-decoration: none; border-radius: 6px; font-weight: 500;">
+              Verify Email
+            </a>
+            <p style="color: #6B7280; font-size: 14px; margin-top: 24px;">
+              This link will expire in 24 hours. If you didn't request this, please ignore this email.
+            </p>
+            <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 32px 0;">
+            <p style="color: #9CA3AF; font-size: 12px;">
+              Firecrawl Observer - Website Change Monitoring
+            </p>
+          </div>
+        `,
       });
-
-      if (!response.ok) {
-        const error = await response.text();
-        console.error("Failed to send verification email:", error);
-      } else {
-        console.log("Verification email sent to:", args.email);
-      }
+      console.log("Verification email sent to:", args.email);
     } catch (error) {
       console.error("Error sending verification email:", error);
+      throw error;
     }
   },
 });

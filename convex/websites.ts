@@ -14,9 +14,12 @@ export const createWebsite = mutation({
       v.literal("none"),
       v.literal("email"),
       v.literal("webhook"),
-      v.literal("both")
+      v.literal("discord"),
+      v.literal("both"),
+      v.literal("all")
     )),
     webhookUrl: v.optional(v.string()),
+    discordWebhookUrl: v.optional(v.string()),
     monitorType: v.optional(v.union(
       v.literal("single_page"),
       v.literal("full_site")
@@ -27,16 +30,25 @@ export const createWebsite = mutation({
   handler: async (ctx, args) => {
     const user = await requireCurrentUser(ctx);
     
-    // Get user settings for default webhook
+    // Get user settings for default webhooks
+    const userSettings = await ctx.db
+      .query("userSettings")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .first();
+    
     let webhookUrl = args.webhookUrl;
-    if (!webhookUrl && args.notificationPreference && ['webhook', 'both'].includes(args.notificationPreference)) {
-      const userSettings = await ctx.db
-        .query("userSettings")
-        .withIndex("by_user", (q) => q.eq("userId", user._id))
-        .first();
-      
+    let discordWebhookUrl = args.discordWebhookUrl;
+    
+    // Apply default webhook URLs if not provided
+    if (!webhookUrl && args.notificationPreference && ['webhook', 'both', 'all'].includes(args.notificationPreference)) {
       if (userSettings?.defaultWebhookUrl) {
         webhookUrl = userSettings.defaultWebhookUrl;
+      }
+    }
+    
+    if (!discordWebhookUrl && args.notificationPreference && ['discord', 'all'].includes(args.notificationPreference)) {
+      if (userSettings?.defaultDiscordWebhookUrl) {
+        discordWebhookUrl = userSettings.defaultDiscordWebhookUrl;
       }
     }
 
@@ -48,6 +60,7 @@ export const createWebsite = mutation({
       checkInterval: args.checkInterval,
       notificationPreference: args.notificationPreference || "none",
       webhookUrl,
+      discordWebhookUrl,
       monitorType: args.monitorType || "single_page",
       crawlLimit: args.crawlLimit,
       crawlDepth: args.crawlDepth,

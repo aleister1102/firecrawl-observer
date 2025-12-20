@@ -39,9 +39,12 @@ const schema = defineSchema({
       v.literal("none"),
       v.literal("email"),
       v.literal("webhook"),
-      v.literal("both")
+      v.literal("discord"),
+      v.literal("both"),
+      v.literal("all")
     )),
     webhookUrl: v.optional(v.string()),
+    discordWebhookUrl: v.optional(v.string()), // Dedicated Discord webhook URL
     monitorType: v.optional(v.union(
       v.literal("single_page"),
       v.literal("full_site")
@@ -122,6 +125,7 @@ const schema = defineSchema({
   userSettings: defineTable({
     userId: v.id("users"),
     defaultWebhookUrl: v.optional(v.string()),
+    defaultDiscordWebhookUrl: v.optional(v.string()), // Default Discord webhook URL
     emailNotificationsEnabled: v.boolean(),
     emailTemplate: v.optional(v.string()),
     // AI Analysis settings
@@ -134,6 +138,7 @@ const schema = defineSchema({
     // AI-based notification filtering
     emailOnlyIfMeaningful: v.optional(v.boolean()), // only send email if AI deems meaningful
     webhookOnlyIfMeaningful: v.optional(v.boolean()), // only send webhook if AI deems meaningful
+    discordOnlyIfMeaningful: v.optional(v.boolean()), // only send discord if AI deems meaningful
     createdAt: v.number(),
     updatedAt: v.number(),
   })

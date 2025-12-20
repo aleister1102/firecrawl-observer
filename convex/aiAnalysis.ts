@@ -189,13 +189,20 @@ export const handleAIBasedNotifications = internalAction({
         return;
       }
 
+      const notifPref = website.notificationPreference;
+
       // Check if we should send webhook notification
-      const shouldSendWebhook = (website.notificationPreference === "webhook" || website.notificationPreference === "both") && 
+      const shouldSendWebhook = (notifPref === "webhook" || notifPref === "both" || notifPref === "all") && 
                                website.webhookUrl && 
                                (!userSettings?.webhookOnlyIfMeaningful || args.isMeaningful);
 
+      // Check if we should send Discord notification
+      const shouldSendDiscord = (notifPref === "discord" || notifPref === "all") && 
+                               website.discordWebhookUrl && 
+                               (!userSettings?.discordOnlyIfMeaningful || args.isMeaningful);
+
       // Check if we should send email notification
-      const shouldSendEmail = (website.notificationPreference === "email" || website.notificationPreference === "both") && 
+      const shouldSendEmail = (notifPref === "email" || notifPref === "both" || notifPref === "all") && 
                              (!userSettings?.emailOnlyIfMeaningful || args.isMeaningful);
 
       // Send webhook notification if conditions are met
@@ -212,6 +219,24 @@ export const handleAIBasedNotifications = internalAction({
           title: scrapeResult.title,
           description: scrapeResult.description,
           markdown: scrapeResult.markdown,
+          scrapedAt: scrapeResult.scrapedAt,
+          aiAnalysis: args.aiAnalysis,
+        });
+      }
+
+      // Send Discord notification if conditions are met
+      if (shouldSendDiscord && website.discordWebhookUrl) {
+        await ctx.scheduler.runAfter(0, internal.notifications.sendDiscordNotification, {
+          webhookUrl: website.discordWebhookUrl,
+          websiteId: scrapeResult.websiteId,
+          websiteName: website.name,
+          websiteUrl: args.websiteUrl,
+          scrapeResultId: args.scrapeResultId,
+          changeType: "content_changed",
+          changeStatus: "changed",
+          diff: args.diff,
+          title: scrapeResult.title,
+          description: scrapeResult.description,
           scrapedAt: scrapeResult.scrapedAt,
           aiAnalysis: args.aiAnalysis,
         });
@@ -240,7 +265,7 @@ export const handleAIBasedNotifications = internalAction({
         }
       }
 
-      console.log(`AI-based notifications processed for ${args.websiteName}. Webhook: ${shouldSendWebhook}, Email: ${shouldSendEmail}`);
+      console.log(`AI-based notifications processed for ${args.websiteName}. Webhook: ${shouldSendWebhook}, Discord: ${shouldSendDiscord}, Email: ${shouldSendEmail}`);
     } catch (error) {
       console.error("Error in AI-based notifications:", error);
     }
