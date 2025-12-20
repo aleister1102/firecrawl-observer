@@ -1,19 +1,17 @@
 import { QueryCtx, MutationCtx, ActionCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { api } from "./_generated/api";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 export async function getCurrentUser(
   ctx: QueryCtx | MutationCtx
 ): Promise<Doc<"users"> | null> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) {
     return null;
   }
-
-  // The subject contains "userId|sessionId", we need to extract the userId
-  const [userId] = identity.subject.split("|");
   
-  const user = await ctx.db.get(userId as Id<"users">);
+  const user = await ctx.db.get(userId);
   return user;
 }
 
@@ -30,14 +28,8 @@ export async function requireCurrentUser(
 export async function getCurrentUserForAction(
   ctx: ActionCtx
 ): Promise<Id<"users"> | null> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
-    return null;
-  }
-
-  // The subject contains "userId|sessionId", we need to extract the userId
-  const [userId] = identity.subject.split("|");
-  return userId as Id<"users">;
+  const userId = await getAuthUserId(ctx);
+  return userId;
 }
 
 export async function requireCurrentUserForAction(

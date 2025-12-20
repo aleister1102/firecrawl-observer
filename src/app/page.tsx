@@ -1887,16 +1887,21 @@ export default function HomePage() {
           }}
           initialConfig={
             editingWebsiteId ? {
-              notificationPreference: websites?.find(w => w._id === editingWebsiteId)?.notificationPreference || 'none',
+              notificationPreference: (() => {
+                const pref = websites?.find(w => w._id === editingWebsiteId)?.notificationPreference || 'none';
+                // Map extended notification types to supported ones
+                if (pref === 'discord' || pref === 'all') return 'webhook';
+                return pref as 'none' | 'email' | 'webhook' | 'both';
+              })(),
               webhookUrl: websites?.find(w => w._id === editingWebsiteId)?.webhookUrl,
               checkInterval: websites?.find(w => w._id === editingWebsiteId)?.checkInterval || 60,
               monitorType: websites?.find(w => w._id === editingWebsiteId)?.monitorType || 'single_page',
               crawlLimit: websites?.find(w => w._id === editingWebsiteId)?.crawlLimit || 5,
               crawlDepth: websites?.find(w => w._id === editingWebsiteId)?.crawlDepth || 3
             } : {
-              notificationPreference: 'none',
+              notificationPreference: 'none' as const,
               checkInterval: 60,
-              monitorType: 'single_page',
+              monitorType: 'single_page' as const,
               crawlLimit: 5,
               crawlDepth: 3
             }

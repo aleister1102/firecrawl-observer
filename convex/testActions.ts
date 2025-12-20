@@ -43,16 +43,23 @@ export const testAIModel = action({
           messages: [
             {
               role: "system",
-              content: "You are a helpful assistant. Please respond with a simple JSON object.",
+              content: "You are a JSON response generator. You MUST respond with ONLY valid JSON, no markdown, no code blocks, no explanations. Start with { and end with }.",
             },
             {
               role: "user",
-              content: "Please respond with a JSON object containing: { \"status\": \"success\", \"message\": \"Connection successful\", \"model\": \"<the model you are>\" }",
+              content: `Generate a JSON response with exactly these fields:
+{
+  "status": "success",
+  "message": "Connection successful",
+  "model": "test"
+}
+
+IMPORTANT: Respond with ONLY the JSON object. No markdown. No code blocks. No extra text.`,
             },
           ],
-          temperature: 0.3,
-          max_tokens: 100,
-          response_format: { type: "json_object" },
+          temperature: 0.1,
+          max_tokens: 200,
+          ...(userSettings.aiBaseUrl?.includes("openai") && { response_format: { type: "json_object" } }),
         }),
       });
       
@@ -62,7 +69,16 @@ export const testAIModel = action({
       }
       
       const data = await response.json();
-      const result = JSON.parse(data.choices[0].message.content);
+      const content = data.choices[0].message.content.trim();
+      
+      // Extract JSON from response (handles markdown code blocks and extra text)
+      let jsonStr = content;
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[0];
+      }
+      
+      const result = JSON.parse(jsonStr);
       
       return {
         success: true,

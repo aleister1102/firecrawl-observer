@@ -1,0 +1,32 @@
+FROM oven/bun:1-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache libc6-compat
+
+# Copy package files
+COPY package.json bun.lock* ./
+
+# Install dependencies
+RUN bun install
+
+# Copy source code
+COPY . .
+
+EXPOSE 3000
+
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+
+# Build arg for Convex URL (MUST be set at build time for NEXT_PUBLIC_* vars)
+ARG NEXT_PUBLIC_CONVEX_URL
+ENV NEXT_PUBLIC_CONVEX_URL=$NEXT_PUBLIC_CONVEX_URL
+
+# Build the app - NEXT_PUBLIC_CONVEX_URL is baked in here
+RUN bun run build:frontend
+
+# Force unbuffered output for docker logs
+ENV NODE_OPTIONS="--no-warnings"
+ENV FORCE_COLOR=1
+
+CMD ["bun", "run", "start"]

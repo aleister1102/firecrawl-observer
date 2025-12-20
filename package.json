@@ -7,6 +7,7 @@
     "dev:frontend": "next dev --turbopack",
     "dev:backend": "convex dev",
     "build": "next build && convex deploy",
+    "build:frontend": "next build",
     "start": "next start",
     "lint": "next lint",
     "convex:dev": "convex dev",

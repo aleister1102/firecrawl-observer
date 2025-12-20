@@ -75,10 +75,33 @@ export default function WebhookPlaygroundPage() {
     ? `${window.location.origin}/api/test-webhook`
     : 'Loading...'
 
-  const copyWebhookUrl = () => {
-    navigator.clipboard.writeText(webhookUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const copyWebhookUrl = async () => {
+    if (!webhookUrl || webhookUrl === 'Loading...') return
+    
+    try {
+      // Try modern clipboard API first
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(webhookUrl)
+      } else {
+        // Fallback for non-HTTPS contexts
+        const textArea = document.createElement('textarea')
+        textArea.value = webhookUrl
+        textArea.style.position = 'fixed'
+        textArea.style.left = '-999999px'
+        textArea.style.top = '-999999px'
+        document.body.appendChild(textArea)
+        textArea.focus()
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+      }
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+      // Last resort: prompt user to copy manually
+      window.prompt('Copy this URL:', webhookUrl)
+    }
   }
 
   const formatTimeAgo = (timestamp: number) => {

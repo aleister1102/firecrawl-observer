@@ -832,10 +832,28 @@ Analyze the provided diff and return a JSON response with:
                             <Button
                               variant="orange"
                               size="sm"
-                              onClick={() => {
-                                navigator.clipboard.writeText(`${window.location.origin}/api/test-webhook`)
-                                setCopiedWebhook(true)
-                                setTimeout(() => setCopiedWebhook(false), 2000)
+                              onClick={async () => {
+                                const url = `${window.location.origin}/api/test-webhook`
+                                try {
+                                  if (navigator.clipboard && window.isSecureContext) {
+                                    await navigator.clipboard.writeText(url)
+                                  } else {
+                                    const textArea = document.createElement('textarea')
+                                    textArea.value = url
+                                    textArea.style.position = 'fixed'
+                                    textArea.style.left = '-999999px'
+                                    textArea.style.top = '-999999px'
+                                    document.body.appendChild(textArea)
+                                    textArea.focus()
+                                    textArea.select()
+                                    document.execCommand('copy')
+                                    document.body.removeChild(textArea)
+                                  }
+                                  setCopiedWebhook(true)
+                                  setTimeout(() => setCopiedWebhook(false), 2000)
+                                } catch {
+                                  window.prompt('Copy this URL:', url)
+                                }
                               }}
                             >
                               {copiedWebhook ? (
