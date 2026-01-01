@@ -6,17 +6,21 @@ import FirecrawlApp from "@mendable/firecrawl-js";
 import { requireCurrentUserForAction } from "./helpers";
 
 // Initialize Firecrawl client with user's API key
-export const getFirecrawlClient = async (ctx: any, userId: string) => {
+export const getFirecrawlClient = async (ctx: any, userId: string): Promise<{ client: FirecrawlApp, keyId?: Id<"firecrawlApiKeys"> }> => {
   // First try to get user's API key from internal query
+  // This will return the highest priority non-exhausted key
   const userKeyData = await ctx.runQuery(internal.firecrawlKeys.getDecryptedFirecrawlKey, { userId });
-  
+
   if (userKeyData && userKeyData.key) {
     // Using user's Firecrawl API key
     // Update last used timestamp
     await ctx.runMutation(internal.firecrawlKeys.updateLastUsed, { keyId: userKeyData.keyId });
-    return new FirecrawlApp({ apiKey: userKeyData.key });
+    return {
+      client: new FirecrawlApp({ apiKey: userKeyData.key }),
+      keyId: userKeyData.keyId
+    };
   }
-  
+
   // Fallback to environment variable if user hasn't set their own key
   const apiKey = process.env.FIRECRAWL_API_KEY;
   if (!apiKey) {
@@ -24,8 +28,21 @@ export const getFirecrawlClient = async (ctx: any, userId: string) => {
     throw new Error("No Firecrawl API key found. Please add your API key in settings.");
   }
   // Using environment Firecrawl API key
-  return new FirecrawlApp({ apiKey });
+  return { client: new FirecrawlApp({ apiKey }) };
 };
+
+// Helper to check if error is due to credit exhaustion
+export function isCreditsExhausted(error: any): boolean {
+  if (!error) return false;
+  const message = error.message?.toLowerCase() || "";
+  // Firecrawl error messages for credits
+  return (
+    message.includes("credit") ||
+    message.includes("limit reached") ||
+    message.includes("payment required") ||
+    error.status === 402
+  );
+}
 
 // Scrape a URL and track changes
 export const scrapeUrl = internalAction({
@@ -36,34 +53,48 @@ export const scrapeUrl = internalAction({
   },
   handler: async (ctx, args): Promise<{
     success: boolean;
-    scrapeResultId: Id<"scrapeResults">;
-    changeStatus: string | undefined;
-    visibility: string | undefined;
-    previousScrapeAt: string | undefined;
+    scrapeResultId?: Id<"scrapeResults">;
+    changeStatus?: string | undefined;
+    visibility?: string | undefined;
+    previousScrapeAt?: string | undefined;
+    error?: string;
   }> => {
-    const firecrawl = await getFirecrawlClient(ctx, args.userId);
+    const website = await ctx.runQuery(internal.websites.getWebsite, {
+      websiteId: args.websiteId,
+      userId: args.userId,
+    });
+
+    const { client: firecrawl, keyId } = await getFirecrawlClient(ctx, args.userId);
 
     try {
       // Scraping URL with change tracking
       // Scrape with change tracking - markdown is required for changeTracking
       const result = await firecrawl.scrapeUrl(args.url, {
         formats: ["markdown", "changeTracking"],
+        skipTlsVerification: website?.skipTlsVerification,
         changeTrackingOptions: {
           modes: ["git-diff"], // Enable git-diff to see what changed
         }
       }) as any;
 
       if (!result.success) {
+        if (isCreditsExhausted(result.error) && keyId) {
+          console.warn(`Credits exhausted for key ${keyId}. Marking as exhausted.`);
+          await ctx.runMutation(internal.firecrawlKeys.markKeyExhausted, { keyId });
+          // We could retry here, but for safety with Convex actions (timeouts), 
+          // we'll just throw so the next scheduled run uses the next key.
+          throw new Error("Firecrawl credits exhausted. Key rotated. Please try again.");
+        }
         throw new Error(`Firecrawl scrape failed: ${result.error}`);
       }
 
       // Log only essential info, not the full response
-      
+
       // Firecrawl returns markdown directly on the result object
       const markdown = result?.markdown || "";
       const changeTracking = result?.changeTracking;
       const metadata = result?.metadata;
-      
+
       // Log only essential change status
       if (changeTracking?.changeStatus === "changed") {
         console.log(`Change detected for ${args.url}: ${changeTracking.changeStatus}`);
@@ -93,10 +124,10 @@ export const scrapeUrl = internalAction({
 
       // If content changed, create an alert and send notifications
       if (changeTracking?.changeStatus === "changed" || changeTracking?.diff) {
-        const diffPreview = changeTracking?.diff?.text ? 
+        const diffPreview = changeTracking?.diff?.text ?
           changeTracking.diff.text.substring(0, 200) + (changeTracking.diff.text.length > 200 ? "..." : "") :
           "Website content has changed since last check";
-          
+
         await ctx.runMutation(internal.websites.createChangeAlert, {
           websiteId: args.websiteId,
           userId: args.userId,
@@ -131,9 +162,9 @@ export const scrapeUrl = internalAction({
 
           if (website && website.notificationPreference !== "none") {
             const notifPref = website.notificationPreference;
-            
+
             // Send webhook notification (for generic webhooks)
-            if ((notifPref === "webhook" || notifPref === "both" || notifPref === "all") && website.webhookUrl) {
+            if ((notifPref === "webhook" || notifPref === "both") && website.webhookUrl) {
               await ctx.scheduler.runAfter(0, internal.notifications.sendWebhookNotification, {
                 webhookUrl: website.webhookUrl,
                 websiteId: args.websiteId,
@@ -150,30 +181,13 @@ export const scrapeUrl = internalAction({
               });
             }
 
-            // Send Discord notification (dedicated Discord webhook)
-            if ((notifPref === "discord" || notifPref === "all") && website.discordWebhookUrl) {
-              await ctx.scheduler.runAfter(0, internal.notifications.sendDiscordNotification, {
-                webhookUrl: website.discordWebhookUrl,
-                websiteId: args.websiteId,
-                websiteName: website.name,
-                websiteUrl: args.url,
-                scrapeResultId,
-                changeType: "content_changed",
-                changeStatus: changeTracking.changeStatus,
-                diff: changeTracking?.diff,
-                title: metadata?.title,
-                description: metadata?.description,
-                scrapedAt: Date.now(),
-              });
-            }
-
             // Send email notification
-            if (notifPref === "email" || notifPref === "both" || notifPref === "all") {
+            if (notifPref === "email" || notifPref === "both") {
               // Get user's email configuration
               const emailConfig = await ctx.runQuery(internal.emailManager.getEmailConfigInternal, {
                 userId: args.userId,
               });
-              
+
               if (emailConfig?.email && emailConfig.isVerified) {
                 await ctx.scheduler.runAfter(0, internal.notifications.sendEmailNotification, {
                   email: emailConfig.email,
@@ -201,6 +215,10 @@ export const scrapeUrl = internalAction({
         previousScrapeAt: changeTracking?.previousScrapeAt,
       };
     } catch (error) {
+      if (isCreditsExhausted(error) && keyId) {
+        console.warn(`Credits exhausted for key ${keyId}. Marking as exhausted.`);
+        await ctx.runMutation(internal.firecrawlKeys.markKeyExhausted, { keyId });
+      }
       console.error("Firecrawl scrape error:", error);
       throw error;
     }
@@ -265,7 +283,7 @@ export const crawlWebsite = action({
   handler: async (ctx, args) => {
     const userId = await requireCurrentUserForAction(ctx);
 
-    const firecrawl = await getFirecrawlClient(ctx, userId);
+    const { client: firecrawl } = await getFirecrawlClient(ctx, userId);
 
     try {
       const crawlResult = await firecrawl.crawlUrl(args.url, {

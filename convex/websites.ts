@@ -14,41 +14,32 @@ export const createWebsite = mutation({
       v.literal("none"),
       v.literal("email"),
       v.literal("webhook"),
-      v.literal("discord"),
-      v.literal("both"),
-      v.literal("all")
+      v.literal("both")
     )),
     webhookUrl: v.optional(v.string()),
-    discordWebhookUrl: v.optional(v.string()),
     monitorType: v.optional(v.union(
       v.literal("single_page"),
       v.literal("full_site")
     )),
     crawlLimit: v.optional(v.number()),
     crawlDepth: v.optional(v.number()),
+    skipTlsVerification: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await requireCurrentUser(ctx);
-    
+
     // Get user settings for default webhooks
     const userSettings = await ctx.db
       .query("userSettings")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .first();
-    
+
     let webhookUrl = args.webhookUrl;
-    let discordWebhookUrl = args.discordWebhookUrl;
-    
-    // Apply default webhook URLs if not provided
-    if (!webhookUrl && args.notificationPreference && ['webhook', 'both', 'all'].includes(args.notificationPreference)) {
+
+    // Apply default webhook URL if not provided
+    if (!webhookUrl && args.notificationPreference && ['webhook', 'both'].includes(args.notificationPreference)) {
       if (userSettings?.defaultWebhookUrl) {
         webhookUrl = userSettings.defaultWebhookUrl;
-      }
-    }
-    
-    if (!discordWebhookUrl && args.notificationPreference && ['discord', 'all'].includes(args.notificationPreference)) {
-      if (userSettings?.defaultDiscordWebhookUrl) {
-        discordWebhookUrl = userSettings.defaultDiscordWebhookUrl;
       }
     }
 
@@ -60,10 +51,10 @@ export const createWebsite = mutation({
       checkInterval: args.checkInterval,
       notificationPreference: args.notificationPreference || "none",
       webhookUrl,
-      discordWebhookUrl,
       monitorType: args.monitorType || "single_page",
       crawlLimit: args.crawlLimit,
       crawlDepth: args.crawlDepth,
+      skipTlsVerification: args.skipTlsVerification,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -175,6 +166,7 @@ export const updateWebsite = mutation({
     )),
     crawlLimit: v.optional(v.number()),
     crawlDepth: v.optional(v.number()),
+    skipTlsVerification: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await requireCurrentUser(ctx);
@@ -210,6 +202,10 @@ export const updateWebsite = mutation({
 
     if (args.crawlDepth !== undefined) {
       updates.crawlDepth = args.crawlDepth;
+    }
+
+    if (args.skipTlsVerification !== undefined) {
+      updates.skipTlsVerification = args.skipTlsVerification;
     }
 
     await ctx.db.patch(args.websiteId, updates);
@@ -482,7 +478,7 @@ export const getAllScrapeHistory = query({
       const websiteScrapes = scrapesByWebsite.get(scrape.websiteId) || [];
       const scrapeIndex = websiteScrapes.findIndex(s => s._id === scrape._id);
       const isFirstScrape = scrapeIndex === websiteScrapes.length - 1; // Last in array is oldest
-      
+
       return {
         ...scrape,
         websiteName: websiteMap.get(scrape.websiteId)?.name || "Unknown",
@@ -509,14 +505,14 @@ export const getLatestScrapeForWebsites = query({
       .collect();
 
     const latestScrapes: Record<string, any> = {};
-    
+
     for (const website of websites) {
       const latestScrape = await ctx.db
         .query("scrapeResults")
         .withIndex("by_website_time", (q) => q.eq("websiteId", website._id))
         .order("desc")
         .first();
-      
+
       if (latestScrape) {
         latestScrapes[website._id] = latestScrape;
       }
@@ -545,13 +541,13 @@ export const deleteWebsite = mutation({
       userId: user._id,
       dataType: "scrapeResults"
     });
-    
+
     await ctx.scheduler.runAfter(0, internal.websites.deleteWebsiteData, {
       websiteId: args.websiteId,
       userId: user._id,
       dataType: "changeAlerts"
     });
-    
+
     if (website.monitorType === "full_site") {
       await ctx.scheduler.runAfter(0, internal.websites.deleteWebsiteData, {
         websiteId: args.websiteId,
@@ -579,10 +575,10 @@ export const deleteWebsiteData = internalMutation({
   handler: async (ctx, args) => {
     const BATCH_SIZE = 20;
     let hasMore = true;
-    
+
     while (hasMore) {
       let items: any[] = [];
-      
+
       switch (args.dataType) {
         case "scrapeResults":
           items = await ctx.db
@@ -603,7 +599,7 @@ export const deleteWebsiteData = internalMutation({
             .take(BATCH_SIZE);
           break;
       }
-      
+
       if (items.length === 0) {
         hasMore = false;
       } else {
@@ -633,6 +629,7 @@ export const createWebsiteFromApi = internalMutation({
     )),
     crawlLimit: v.optional(v.number()),
     crawlDepth: v.optional(v.number()),
+    skipTlsVerification: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const websiteId = await ctx.db.insert("websites", {
@@ -646,6 +643,7 @@ export const createWebsiteFromApi = internalMutation({
       monitorType: args.monitorType || "single_page",
       crawlLimit: args.crawlLimit,
       crawlDepth: args.crawlDepth,
+      skipTlsVerification: args.skipTlsVerification,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -673,7 +671,7 @@ export const pauseWebsiteFromApi = internalMutation({
     // Find the website
     const websiteId = args.websiteId as Id<"websites">;
     const website = await ctx.db.get(websiteId);
-    
+
     if (!website || website.userId !== args.userId) {
       return false;
     }
@@ -698,7 +696,7 @@ export const deleteWebsiteFromApi = internalMutation({
     // Find the website
     const websiteId = args.websiteId as Id<"websites">;
     const website = await ctx.db.get(websiteId);
-    
+
     if (!website || website.userId !== args.userId) {
       return false;
     }
@@ -709,13 +707,13 @@ export const deleteWebsiteFromApi = internalMutation({
       userId: args.userId,
       dataType: "scrapeResults"
     });
-    
+
     await ctx.scheduler.runAfter(0, internal.websites.deleteWebsiteData, {
       websiteId: websiteId,
       userId: args.userId,
       dataType: "changeAlerts"
     });
-    
+
     if (website.monitorType === "full_site") {
       await ctx.scheduler.runAfter(0, internal.websites.deleteWebsiteData, {
         websiteId: websiteId,
@@ -726,7 +724,7 @@ export const deleteWebsiteFromApi = internalMutation({
 
     // Delete the website immediately
     await ctx.db.delete(websiteId);
-    
+
     return true;
   },
 });

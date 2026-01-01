@@ -4,7 +4,7 @@ import { v } from "convex/values";
 
 const schema = defineSchema({
   ...authTables,
-  
+
   // API Keys
   apiKeys: defineTable({
     userId: v.id("users"),
@@ -16,15 +16,21 @@ const schema = defineSchema({
     .index("by_user", ["userId"])
     .index("by_key", ["key"]),
 
-  // Firecrawl Auth
   firecrawlApiKeys: defineTable({
     userId: v.id("users"),
     encryptedKey: v.string(),
+    name: v.optional(v.string()), // Optional friendly name for the key
+    priority: v.optional(v.number()), // Order for rotation (lower = higher priority)
+    remainingCredits: v.optional(v.number()), // Cached credit count
+    isExhausted: v.optional(v.boolean()), // Whether credits have run out
+    lastCreditCheck: v.optional(v.number()), // When credits were last checked
     lastUsed: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_user", ["userId"]),
+    .index("by_user", ["userId"])
+    .index("by_user_priority", ["userId", "priority"])
+    .index("by_user_exhausted", ["userId", "isExhausted"]),
 
   // Website monitoring tables
   websites: defineTable({
@@ -39,12 +45,9 @@ const schema = defineSchema({
       v.literal("none"),
       v.literal("email"),
       v.literal("webhook"),
-      v.literal("discord"),
-      v.literal("both"),
-      v.literal("all")
+      v.literal("both")
     )),
     webhookUrl: v.optional(v.string()),
-    discordWebhookUrl: v.optional(v.string()), // Dedicated Discord webhook URL
     monitorType: v.optional(v.union(
       v.literal("single_page"),
       v.literal("full_site")
@@ -55,6 +58,7 @@ const schema = defineSchema({
     totalPages: v.optional(v.number()), // total pages found in last crawl
     createdAt: v.number(),
     updatedAt: v.number(),
+    skipTlsVerification: v.optional(v.boolean()),
   })
     .index("by_user", ["userId"])
     .index("by_active", ["isActive"]),
@@ -120,12 +124,11 @@ const schema = defineSchema({
     .index("by_user", ["userId"])
     .index("by_email", ["email"])
     .index("by_token", ["verificationToken"]),
-    
+
   // User settings for defaults
   userSettings: defineTable({
     userId: v.id("users"),
     defaultWebhookUrl: v.optional(v.string()),
-    defaultDiscordWebhookUrl: v.optional(v.string()), // Default Discord webhook URL
     emailNotificationsEnabled: v.boolean(),
     emailTemplate: v.optional(v.string()),
     // AI Analysis settings
@@ -138,7 +141,6 @@ const schema = defineSchema({
     // AI-based notification filtering
     emailOnlyIfMeaningful: v.optional(v.boolean()), // only send email if AI deems meaningful
     webhookOnlyIfMeaningful: v.optional(v.boolean()), // only send webhook if AI deems meaningful
-    discordOnlyIfMeaningful: v.optional(v.boolean()), // only send discord if AI deems meaningful
     createdAt: v.number(),
     updatedAt: v.number(),
   })

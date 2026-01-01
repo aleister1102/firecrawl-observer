@@ -11,6 +11,9 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Firecrawl Observer",
   description: "Monitor websites with Firecrawl change tracking",
+  icons: {
+    icon: "/icon.png",
+  },
 };
 
 export const viewport: Viewport = {

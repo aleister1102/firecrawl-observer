@@ -55,7 +55,7 @@ Analyze the provided diff and return a JSON response with:
       // Use custom base URL if provided, otherwise default to OpenAI
       const baseUrl = userSettings.aiBaseUrl || "https://api.openai.com/v1";
       const apiUrl = `${baseUrl.replace(/\/$/, '')}/chat/completions`;
-      
+
       // Call AI API
       const response = await fetch(apiUrl, {
         method: "POST",
@@ -96,9 +96,9 @@ Please analyze these changes and determine if they are meaningful.`,
       const aiResponse = JSON.parse(data.choices[0].message.content);
 
       // Validate response structure
-      if (typeof aiResponse.score !== "number" || 
-          typeof aiResponse.isMeaningful !== "boolean" ||
-          typeof aiResponse.reasoning !== "string") {
+      if (typeof aiResponse.score !== "number" ||
+        typeof aiResponse.isMeaningful !== "boolean" ||
+        typeof aiResponse.reasoning !== "string") {
         console.error("Invalid AI response format:", aiResponse);
         return;
       }
@@ -192,18 +192,13 @@ export const handleAIBasedNotifications = internalAction({
       const notifPref = website.notificationPreference;
 
       // Check if we should send webhook notification
-      const shouldSendWebhook = (notifPref === "webhook" || notifPref === "both" || notifPref === "all") && 
-                               website.webhookUrl && 
-                               (!userSettings?.webhookOnlyIfMeaningful || args.isMeaningful);
-
-      // Check if we should send Discord notification
-      const shouldSendDiscord = (notifPref === "discord" || notifPref === "all") && 
-                               website.discordWebhookUrl && 
-                               (!userSettings?.discordOnlyIfMeaningful || args.isMeaningful);
+      const shouldSendWebhook = (notifPref === "webhook" || notifPref === "both") &&
+        website.webhookUrl &&
+        (!userSettings?.webhookOnlyIfMeaningful || args.isMeaningful);
 
       // Check if we should send email notification
-      const shouldSendEmail = (notifPref === "email" || notifPref === "both" || notifPref === "all") && 
-                             (!userSettings?.emailOnlyIfMeaningful || args.isMeaningful);
+      const shouldSendEmail = (notifPref === "email" || notifPref === "both") &&
+        (!userSettings?.emailOnlyIfMeaningful || args.isMeaningful);
 
       // Send webhook notification if conditions are met
       if (shouldSendWebhook && website.webhookUrl) {
@@ -224,31 +219,13 @@ export const handleAIBasedNotifications = internalAction({
         });
       }
 
-      // Send Discord notification if conditions are met
-      if (shouldSendDiscord && website.discordWebhookUrl) {
-        await ctx.scheduler.runAfter(0, internal.notifications.sendDiscordNotification, {
-          webhookUrl: website.discordWebhookUrl,
-          websiteId: scrapeResult.websiteId,
-          websiteName: website.name,
-          websiteUrl: args.websiteUrl,
-          scrapeResultId: args.scrapeResultId,
-          changeType: "content_changed",
-          changeStatus: "changed",
-          diff: args.diff,
-          title: scrapeResult.title,
-          description: scrapeResult.description,
-          scrapedAt: scrapeResult.scrapedAt,
-          aiAnalysis: args.aiAnalysis,
-        });
-      }
-
       // Send email notification if conditions are met
       if (shouldSendEmail) {
         // Get user's email configuration
         const emailConfig = await ctx.runQuery(internal.emailManager.getEmailConfigInternal, {
           userId: args.userId,
         });
-        
+
         if (emailConfig?.email && emailConfig.isVerified) {
           await ctx.scheduler.runAfter(0, internal.notifications.sendEmailNotification, {
             email: emailConfig.email,
@@ -265,7 +242,7 @@ export const handleAIBasedNotifications = internalAction({
         }
       }
 
-      console.log(`AI-based notifications processed for ${args.websiteName}. Webhook: ${shouldSendWebhook}, Discord: ${shouldSendDiscord}, Email: ${shouldSendEmail}`);
+      console.log(`AI-based notifications processed for ${args.websiteName}. Webhook: ${shouldSendWebhook}, Email: ${shouldSendEmail}`);
     } catch (error) {
       console.error("Error in AI-based notifications:", error);
     }

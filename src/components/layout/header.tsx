@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useState, useEffect, useCallback } from 'react'
 import { Github, LogOut, User, Loader2, ChevronDown, Code, BookOpen, Settings, Coins } from 'lucide-react'
@@ -30,10 +31,10 @@ export function Header({ showCTA = true, ctaText = "Use this template", ctaHref 
   const firecrawlKey = useQuery(api.firecrawlKeys.getUserFirecrawlKey)
   const getTokenUsage = useAction(api.firecrawlKeys.getTokenUsage)
   const [tokenUsage, setTokenUsage] = useState<{ remaining_tokens?: number; error?: string } | null>(null)
-  
+
   const fetchTokenUsage = useCallback(async () => {
     try {
-      const result = await getTokenUsage()
+      const result = await getTokenUsage({})
       if (result.success) {
         setTokenUsage({ remaining_tokens: result.remaining_tokens })
       } else {
@@ -43,7 +44,7 @@ export function Header({ showCTA = true, ctaText = "Use this template", ctaHref 
       setTokenUsage({ error: 'Failed to fetch token usage' })
     }
   }, [getTokenUsage])
-  
+
   useEffect(() => {
     if (firecrawlKey?.hasKey && isAuthenticated) {
       fetchTokenUsage()
@@ -68,9 +69,16 @@ export function Header({ showCTA = true, ctaText = "Use this template", ctaHref 
     <header className="px-4 sm:px-6 lg:px-8 py-4 border-b border-zinc-200 bg-white">
       <div className="flex items-center justify-between max-w-7xl mx-auto">
         <Link href="/" className="flex items-center">
-          <img src="/firecrawl-logo-with-fire.webp" alt="Firecrawl" className="h-8 w-auto" />
+          <Image
+            src="/firecrawl-logo-with-fire.webp"
+            alt="Firecrawl"
+            width={120}
+            height={32}
+            className="h-8 w-auto"
+            priority
+          />
         </Link>
-        
+
         <div className="flex items-center gap-4">
           {isAuthenticated && tokenUsage?.remaining_tokens !== undefined && (
             <div className="hidden sm:flex items-center gap-2 text-sm text-gray-600">
@@ -87,55 +95,55 @@ export function Header({ showCTA = true, ctaText = "Use this template", ctaHref 
                 </Button>
               </Link>
               <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="code" size="sm" className="gap-2">
-                  <User className="h-4 w-4" />
-                  <span className="hidden sm:inline-block">{currentUser?.email || 'Account'}</span>
-                  <ChevronDown className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">Account</p>
-                    <p className="text-xs leading-none text-zinc-500">
-                      {currentUser?.email || ''}
-                    </p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/settings" className="flex items-center cursor-pointer">
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Settings</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/docs" className="flex items-center cursor-pointer">
-                    <BookOpen className="mr-2 h-4 w-4" />
-                    <span>Documentation</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem 
-                  onClick={handleSignOut}
-                  disabled={isSigningOut}
-                  className="cursor-pointer"
-                >
-                  {isSigningOut ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      <span>Logging out...</span>
-                    </>
-                  ) : (
-                    <>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      <span>Log out</span>
-                    </>
-                  )}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="code" size="sm" className="gap-2">
+                    <User className="h-4 w-4" />
+                    <span className="hidden sm:inline-block">{currentUser?.email || 'Account'}</span>
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">Account</p>
+                      <p className="text-xs leading-none text-zinc-500">
+                        {currentUser?.email || ''}
+                      </p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings" className="flex items-center cursor-pointer">
+                      <Settings className="mr-2 h-4 w-4" />
+                      <span>Settings</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/docs" className="flex items-center cursor-pointer">
+                      <BookOpen className="mr-2 h-4 w-4" />
+                      <span>Documentation</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={handleSignOut}
+                    disabled={isSigningOut}
+                    className="cursor-pointer"
+                  >
+                    {isSigningOut ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <span>Logging out...</span>
+                      </>
+                    ) : (
+                      <>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        <span>Log out</span>
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           ) : (
             showCTA && (
